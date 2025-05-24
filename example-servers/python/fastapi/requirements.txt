@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+requests
+# Add any other specific dependencies required by the services,
+# e.g., a specific version of openai if needed, though often 'requests' is sufficient for basic API calls.
+# For now, keeping it minimal.
