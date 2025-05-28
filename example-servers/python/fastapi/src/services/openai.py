@@ -11,7 +11,7 @@ router = APIRouter()
 
 class OpenAIChatMessage(BaseModel):
     role: str
-    content: str
+    text: str
 
 class OpenAIChatBody(BaseModel):
     messages: List[OpenAIChatMessage]
@@ -38,7 +38,7 @@ class OpenAIService:
         
         openai_body = {
             "model": body.model,
-            "messages": [{"role": msg.role, "content": msg.content} for msg in body.messages]
+            "messages": [{"role": "assistant" if msg.role == "ai" else msg.role, "content": msg.text} for msg in body.messages]
         }
         
         try:
@@ -46,13 +46,12 @@ class OpenAIService:
                 "https://api.openai.com/v1/chat/completions", json=openai_body, headers=headers)
             response.raise_for_status()
             json_response = response.json()
-            
-            if json_response.get("choices") and json_response["choices"][0].get("message") and json_response["choices"][0]["message"].get("content"):
-                return {"text": json_response["choices"][0]["message"]["content"]}
-            elif json_response.get("error"):
-                 raise HTTPException(status_code=response.status_code, detail=json_response["error"].get("message", "OpenAI API error"))
-            else:
-                raise HTTPException(status_code=500, detail="Unexpected response format from OpenAI chat API")
+            if "error" in json_response:
+                raise Exception(json_response["error"]["message"])
+
+            # Sends response back to Deep Chat using the Response format:
+            # https://deepchat.dev/docs/connect/#Response
+            return {"text": json_response["choices"][0]["message"]["content"]}
 
         except requests.exceptions.RequestException as e:
             print(f"OpenAI API request error (chat): {e}")
