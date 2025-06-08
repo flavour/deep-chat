@@ -4,7 +4,7 @@ import SpeechToElement from 'speech-to-element';
 import {SpeechToText} from './speechToText';
 
 export class SilenceSubmit {
-  private _silenceTimeout?: number;
+  private _silenceTimeout?: ReturnType<typeof setTimeout>;
   private readonly _silenceMS: number = 2000;
   private readonly _stop: boolean = true;
 

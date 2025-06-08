@@ -1,5 +1,16 @@
+/**
+ * Local SpeechEvents interface (duplicated from types/microphone.ts due to import issues)
+ */
+interface SpeechEvents {
+  onStart?: () => void;
+  onStop?: () => void;
+  onResult?: (text: string, isFinal: boolean) => void;
+  onPreResult?: (text: string, isFinal: boolean) => void;
+  onCommandModeTrigger?: (isStart: boolean) => void;
+  onPauseTrigger?: (isStart: boolean) => void;
+}
 import {ValidationHandler} from '../../../../../../types/validationHandler';
-import {SpeechToTextConfig} from '../../../../../../types/microphone';
+import {SpeechToTextConfig, TransformersOptions} from '../../../../../../types/microphone';
 import {OnPreResult} from 'speech-to-element/dist/types/options';
 import {TextInputEl} from '../../../textInput/textInput';
 import {Messages} from '../../../../messages/messages';
@@ -69,12 +80,23 @@ export class SpeechToText extends MicrophoneButton {
   }
 
   private static getServiceName(config: SpeechToTextConfig) {
+    // --- WebSpeech API ---
+    // https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API
+    // --- Transformers JS ---
+    // https://github.com/huggingface/transformers.js
+    if (config.transformers) return 'transformers';
     return config.azure ? 'azure' : 'webspeech';
   }
 
   private buttonClick(textInput: TextInputEl, isInputEnabled: boolean, serviceName: string, config?: ProcessedConfig) {
     const events = config?.events;
     textInput.removePlaceholderStyle();
+
+    if (serviceName === 'transformers' && config?.transformers) {
+      this.handleTransformers(textInput, isInputEnabled, config.transformers, events);
+      return;
+    }
+
     SpeechToElement.toggle(serviceName as 'webspeech', {
       insertInCursorLocation: false,
       element: isInputEnabled ? textInput.inputElementRef : undefined,
@@ -110,6 +132,80 @@ export class SpeechToText extends MicrophoneButton {
       },
       ...config,
     });
+  }
+
+  private handleTransformers(
+    textInput: TextInputEl,
+    isInputEnabled: boolean,
+    transformersConfig: TransformersOptions,
+    events?: SpeechEvents & { onError?: (error: unknown) => void }
+  ) {
+    // Only allow if input is enabled
+    if (!isInputEnabled) return;
+
+    // Start recording audio
+    const chunks: BlobPart[] = [];
+    let mediaRecorder: MediaRecorder | null = null;
+    let worker: Worker | null = null;
+
+    const startRecording = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          const arrayBuffer = await blob.arrayBuffer();
+
+          // Start worker
+          worker = new Worker(
+            new URL('./transformersWorker.ts', import.meta.url),
+            { type: 'module' }
+          );
+          worker.onmessage = (evt) => {
+            const { text, error } = evt.data;
+            if (error) {
+              this.onError();
+              events?.onError?.(error);
+            } else if (text) {
+              // Insert text into input
+              (textInput.inputElementRef as HTMLInputElement).value = text;
+              events?.onResult?.(text, true);
+              this._validationHandler?.();
+            }
+            worker?.terminate();
+          };
+
+          worker.postMessage({
+            audioBuffer: arrayBuffer,
+            config: transformersConfig
+          });
+        };
+
+        mediaRecorder.start();
+
+        // Stop after 10 seconds or on button click again
+        setTimeout(() => mediaRecorder?.state === 'recording' && mediaRecorder.stop(), 10000);
+
+        // Optionally, allow stopping on button click again
+        this.elementRef.onclick = () => {
+          if (mediaRecorder?.state === 'recording') {
+            mediaRecorder.stop();
+          }
+        };
+
+        events?.onStart?.();
+      } catch (err) {
+        this.onError();
+        events?.onError?.(err);
+      }
+    };
+
+    startRecording();
   }
 
   private onCommandModeTrigger(isStart: boolean) {

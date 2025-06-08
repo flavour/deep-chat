@@ -207,7 +207,7 @@ export class Stream {
     return Stream.isSimulation(stream) && respone && (respone.text || respone.html);
   }
 
-  private static abort(timeout: number, stream: MessageStream, onClose: () => void) {
+  private static abort(timeout: ReturnType<typeof setTimeout>, stream: MessageStream, onClose: () => void) {
     clearTimeout(timeout);
     stream.finaliseStreamedMessage();
     onClose();

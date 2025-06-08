@@ -10,7 +10,7 @@ import {DeepChat} from '../../../../../deepChat';
 
 export class AudioFileAttachmentType extends FileAttachmentsType {
   stopPlaceholderCallback?: () => Promise<void>;
-  private _activePlaceholderTimer?: number;
+  private _activePlaceholderTimer?: ReturnType<typeof setTimeout>;
   private _activePlaceholderAttachment?: AttachmentObject;
   private static readonly TIMER_LIMIT_S = 5999;
 

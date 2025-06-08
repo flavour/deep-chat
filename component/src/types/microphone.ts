@@ -28,9 +28,20 @@ export interface SpeechEvents {
   onPauseTrigger?: (isStart: boolean) => void;
 }
 
+export interface TransformersOptions {
+  // https://github.com/huggingface/transformers.js/pull/1219
+  // 'onnx-community/lite-whisper-large-v3-turbo-acc-ONNX'
+  model: string;
+  // device: 'webgpu',
+  // dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' }, // for GPU
+  // dtype: 'q8', // for CPU
+  pipelineOptions?: Record<string, string>;
+}
+
 export type SpeechToTextConfig = {
   webSpeech?: true | WebSpeechOptions;
   azure?: AzureOptions;
+  transformers?: TransformersOptions;
   displayInterimResults?: boolean;
   textColor?: TextColor;
   translations?: Translations;
